@@ -1,77 +1,333 @@
-import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 
-public class TClistener extends PluginListener{
-	ArrayList<String> cmdlist = new ArrayList<String>();
-	ArrayList<String> playerlist = new ArrayList<String>();
-	ArrayList<String> timeslist = new ArrayList<String>();
-	ArrayList<String> minlist = new ArrayList<String>();
-	static ArrayList<String> currentplayer = new ArrayList<String>();
-	
+/**
+ * @project TempCommands
+ * @author Spenk & Babble
+ * @version 0.1
+ * @category Misc
+ */
+public class TClistener extends PluginListener {
+	HashMap<String, String> delayed = new HashMap<String, String>();
+
 	public boolean onCommand(Player player, String[] split) {
-    	if (split[0].equalsIgnoreCase("/tcadd") && player.canUseCommand("/BLM") && split.length > 3) { // Player command times intime
-    		playerlist.add(split[1]); 
-    		cmdlist.add(split[2]); 
-    		timeslist.add(split[3]);
-    		if (split.length == 5){
-    			minlist.add(split[4]);
-    		}
-    		player.sendMessage(Colors.Green+split[1]+" succesfully added the command "+split[2]+" "+ split[3]+" times.");
-    		return true;
-    	}   	
-    	
-    	if (PlayerIsAllowedToDoThisCommand(player, split) == true) { // check if timeslist[playergetnum] != 0 .....
-    		player.sendMessage("bis jetzt alles richtig");
-    		// player allow command split[0]
-    		player.chat(split[1] + restofsplit(split));
-    		// player disallow command
-    		// times -1
-    		return true;
-    	}else{
-    		return false;
-    	}
+		if (split[0].equalsIgnoreCase("/tc") && player.canUseCommand("/BLM")) {
+			if (split.length < 5) {
+				player.notify("/tc <player> </command> <uses> <delay> <Second / Minutes (S/M)>");
+				return true;
+			}
+
+			Player player2 = etc.getServer().matchPlayer(split[1]);
+			this.addTempCommand(player2, split[2], Integer.parseInt(split[3]),
+					Integer.parseInt(split[4]), split[5]);
+			return true;
+		}
+		return false;
 	}
-	
-	
-	private boolean PlayerIsAllowedToDoThisCommand(Player player,String[] command){
-		int zahl=0;
-		while (zahl < playerlist.toArray().length){
-			if (playergetnum(player,command) != 999){
-				if (command[0].equals(cmdlist.toArray()[playergetnum(player,command)])){
-					return true;
-				}
+
+	/**
+	 * Adds the command to the propertiesFile
+	 * 
+	 * 
+	 * @param player
+	 * @param command
+	 * @param uses
+	 * @param delay
+	 * @param paramDelay
+	 */
+	public void addTempCommand(Player player, String command, int uses,
+			int delay, String paramDelay) {
+		if (uses == 0) {
+			return;
+		}
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		String toSave = command + "," + uses + "," + delay + "," + paramDelay;
+		if (p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			p.setString(player.getName(), toSave);
+		} else {
+			p.setString(player.getName(), p.getString(player.getName()) + ":"
+					+ toSave);
+		}
+		return;
+	}
+
+	/**
+	 * removes a command from the propertiesfile
+	 * 
+	 * 
+	 * @param player
+	 * @param command
+	 */
+	public void removeTempCommand(Player player, String command) {
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		if (!p.containsKey(player.getName())
+				|| p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			return;
+		}
+		StringBuilder toRecover = new StringBuilder();
+		List<String> list = Arrays.asList(p.getString(player.getName()).split(
+				":"));
+		for (String s : list) {
+			String[] l2 = s.split(",");
+			if (l2[0].equalsIgnoreCase(command)) {
+				list.remove(s);
+			}
+			if (toRecover.toString().equalsIgnoreCase("")) {
+				toRecover.append(s);
+			} else {
+				toRecover.append(":" + s);
+			}
+			if (!toRecover.toString().equalsIgnoreCase("")) {
+				p.setString(player.getName(), toRecover.toString());
+			}
+		}
+		return;
+	}
+
+	/**
+	 * checks if the propertiesFile still contains the command
+	 * 
+	 * @param player
+	 * @param command
+	 * @return canUseCommand
+	 */
+	public boolean isAllowed(Player player, String command) {
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		if (!p.containsKey(player.getName())
+				|| p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			return false;
+		}
+		for (String s : delayed.get(player.getName()).split(",")) {
+			if (s.equalsIgnoreCase(command)) {
+				return false;
+			}
+		}
+
+		List<String> list = Arrays.asList(p.getString(player.getName()).split(
+				":"));
+		for (String s : list) {
+			String[] l2 = s.split(",");
+			if (l2[0].equalsIgnoreCase(command)) {
+				return true;
 			}
 		}
 		return false;
 	}
-	
-	private int playergetnum(Player player,String[] split){
-		int zahl = 0;
-		while (zahl < playerlist.toArray().length){
-		   	if (player.getName().equals(playerlist.toArray()[zahl]) && split[0].equals(cmdlist.toArray()[zahl])){
-		   		return zahl;
-		   	}
-		   	zahl++;
+
+	/**
+	 * checks how many times the player can use the command
+	 * 
+	 * 
+	 * @param player
+	 * @param command
+	 * @return times the player can still use the command
+	 */
+	public int getTimes(Player player, String command) {
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		if (!p.containsKey(player.getName())
+				|| p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			return 0;
 		}
-		return 999;
+		List<String> list = Arrays.asList(p.getString(player.getName()).split(
+				":"));
+		for (String s : list) {
+			String[] l2 = s.split(",");
+			if (l2[0].equalsIgnoreCase(command)) {
+				return Integer.parseInt(l2[1]);
+			}
+		}
+		return 0;
 	}
-	
-	private String restofsplit(String[] split){
-		int zahl=2;
-		String returner = "";
-		while (zahl<split.length){
-			returner += " "+split[zahl];
-			zahl++;
+
+	/**
+	 * sets the times of usage left
+	 * 
+	 * 
+	 * @param player
+	 * @param command
+	 * @param times
+	 */
+	public void setTimes(Player player, String command, int times) {
+		if (times <= 0) {
+			this.removeTempCommand(player, command);
+			return;
 		}
-		return returner;
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		if (!p.containsKey(player.getName())
+				|| p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			return;
+		}
+		StringBuilder toRecover = new StringBuilder();
+		List<String> list = Arrays.asList(p.getString(player.getName()).split(
+				":"));
+		for (String s : list) {
+			String[] l2 = s.split(",");
+			if (l2[0].equalsIgnoreCase(command)) {
+				int time = Integer.parseInt(l2[1]) - 1;
+				String toAddToTorecover = l2[0] + "," + time + l2[2] + ","
+						+ l2[3];
+				if (toRecover.toString().equalsIgnoreCase("")) {
+					toRecover.append(toAddToTorecover);
+				} else {
+					toRecover.append(":" + toAddToTorecover);
+				}
+			}
+			if (toRecover.toString().equalsIgnoreCase("")) {
+				toRecover.append(s);
+			} else {
+				toRecover.append(":" + s);
+			}
+			if (!toRecover.toString().equalsIgnoreCase("")) {
+				p.setString(player.getName(), toRecover.toString());
+			}
+		}
+		return;
 	}
-	
-	/*public PluginLoader.HookResult canPlayerUseCommand(Player player, String[] command) {
-		if (PlayerIsAllowedToDoThisCommand(player, command) == true && (cmdlist.toArray()[playergetnum(player, command)] == command)){
-			
-			PluginLoader.HookResult.ALLOW_ACTION;
-			
-		}else{
-			
+
+	/**
+	 * returns the delay between command usage
+	 * 
+	 * 
+	 * @param player
+	 * @param command
+	 * @return delay
+	 */
+	public int getDelay(Player player, String command) {
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		if (!p.containsKey(player.getName())
+				|| p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			return 0;
 		}
-	}*/
+		List<String> list = Arrays.asList(p.getString(player.getName()).split(
+				":"));
+		for (String s : list) {
+			String[] l2 = s.split(",");
+			if (l2[0].equalsIgnoreCase(command)) {
+				return Integer.parseInt(l2[2]);
+			}
+		}
+		return 0;
+	}
+
+	/**
+	 * returns M or S depending on Minutes or Seconds
+	 * 
+	 * 
+	 * @param player
+	 * @param command
+	 * @return
+	 */
+	public String getDelayParam(Player player, String command) {
+		PropertiesFile p = new PropertiesFile(
+				"plugins/config/TempCommandsTemp.properties");
+		if (!p.containsKey(player.getName())
+				|| p.getString(player.getName()) == null
+				|| p.getString(player.getName()).equalsIgnoreCase("")) {
+			return null;
+		}
+		List<String> list = Arrays.asList(p.getString(player.getName()).split(
+				":"));
+		for (String s : list) {
+			String[] l2 = s.split(",");
+			if (l2[0].equalsIgnoreCase(command)) {
+				return l2[3].toUpperCase();
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * 
+	 * this is mend to add a command to the hashmap after this
+	 * startDelayTimer(); has to be triggered!
+	 * 
+	 * @param player
+	 * @param command
+	 */
+	public void addToDelay(Player player, String command) {
+		if (!delayed.containsKey(player.getName())) {
+			delayed.put(player.getName(), command);
+			return;
+		}
+		String exist = delayed.get(player.getName());
+		delayed.remove(player.getName());
+		delayed.put(player.getName(), exist + "," + command);
+		return;
+	}
+
+	public void removeFromDelay(Player player, String command) {
+		if (delayed.containsKey(player.getName())) {
+			String[] commands = delayed.get(player.getName()).split(",");
+			int i = 0;
+			while (i < commands.length) {
+				if (commands[i].equalsIgnoreCase(command)) {
+					commands[i].replace(command, "");
+				}
+			}
+			String toSave = etc.combineSplit(0, commands, ",");
+			if (toSave.equalsIgnoreCase("") || toSave == null) {
+				delayed.remove(player.getName());
+			} else {
+				delayed.remove(player.getName());
+				delayed.put(player.getName(), toSave);
+			}
+		}
+	}
+
+	/**
+	 * 
+	 * this is mend to remove a command from the hashmap
+	 * 
+	 * @param player
+	 * @param command
+	 * @param time
+	 * @param delayParam
+	 */
+	public void startDelayTimer(final Player player, final String command,
+			int time, String delayParam) {
+		long timer = 0;
+		if (delayParam.equalsIgnoreCase("M")) {
+			timer = (time * 60) * 1000;
+		} else if (delayParam.equalsIgnoreCase("S")) {
+			timer = time * 1000;
+		}
+		final long t = timer;
+		new Thread() {
+			public void run() {
+				try {
+					Thread.sleep(t);
+					removeFromDelay(player, command);
+					setTimes(player, command, getTimes(player, command) - 1);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+		}.start();
+	}
+
+	
+	public PluginLoader.HookResult canPlayerUseCommand(Player player,
+			String[] command) {
+		if (this.isAllowed(player, command[0])) {
+			this.addToDelay(player, command[0]);
+			this.startDelayTimer(player, command[0],
+					this.getDelay(player, command[0]),
+					this.getDelayParam(player, command[0]));
+			return PluginLoader.HookResult.ALLOW_ACTION;
+		}
+		return PluginLoader.HookResult.DEFAULT_ACTION;
+	}
 }
